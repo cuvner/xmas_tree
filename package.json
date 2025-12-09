@@ -1,0 +1,14 @@
+{
+  "name": "xmas_tree",
+  "version": "1.0.0",
+  "description": "Interactive holiday tree served by a Node.js host.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node -e \"console.log('No automated tests configured.')\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
