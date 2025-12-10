@@ -246,6 +246,32 @@ function drawBaubles(g, list) {
 //
 function handleFile(file) {
   if (file.type === "image") {
-    loadImage(file.data, img => images.push(img));
+    uploadToServer(file.file || file)
+      .then((url) => {
+        loadImage(url, (img) => images.push(img), (err) => {
+          console.error('Failed to load uploaded image:', err);
+        });
+      })
+      .catch((err) => {
+        console.error('Upload failed:', err);
+      });
   }
+}
+
+async function uploadToServer(imageFile) {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  const response = await fetch('/upload', {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || 'Upload failed');
+  }
+
+  const data = await response.json();
+  return data.path;
 }

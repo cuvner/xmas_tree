@@ -3,6 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
+const S3_BUCKET = process.env.S3_BUCKET;
+const AWS_REGION = process.env.AWS_REGION;
+const ASSET_BASE_URL = process.env.ASSET_BASE_URL || (S3_BUCKET ? `https://${S3_BUCKET}.s3.amazonaws.com` : null);
+let s3Client;
+let PutObjectCommand;
+
 const ROOT_DIR = __dirname;
 const UPLOAD_DIR = path.join(ROOT_DIR, 'uploads');
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
@@ -130,20 +136,13 @@ function handleUpload(req, res) {
     if (aborted) return;
     const body = Buffer.concat(chunks);
     const parts = parseMultipartBody(body, boundary);
+    void processUpload(parts, res);
+  });
+}
 
-    const imagePart = parts.find((part) => {
-      const dispositionLine = part.headers
-        .split(/\r?\n/)
-        .find((line) => line.toLowerCase().startsWith('content-disposition'));
-      if (!dispositionLine) return false;
-
-      const nameMatch = dispositionLine.match(/name="([^"]+)"/i);
-      const fieldName = nameMatch ? nameMatch[1] : '';
-      if (fieldName !== 'image') return false;
-
-      const filenameMatch = dispositionLine.match(/filename="([^"]*)"/i);
-      return Boolean(filenameMatch && filenameMatch[1]);
-    });
+async function processUpload(parts, res) {
+  try {
+    const imagePart = extractImagePart(parts);
 
     if (!imagePart) {
       sendJson(res, 400, { error: 'No image file provided in field "image".' });
@@ -173,21 +172,75 @@ function handleUpload(req, res) {
 
     const fileExtension = extensionMap[mimeType] || '.img';
     const fileName = `${randomUUID()}${fileExtension}`;
-    const destination = path.join(UPLOAD_DIR, fileName);
+    const storedPath = await storeImage(imagePart.data, mimeType, fileName);
 
-    fs.writeFile(destination, imagePart.data, (err) => {
-      if (err) {
-        sendJson(res, 500, { error: 'Failed to store upload.' });
-        return;
-      }
-
-      sendJson(res, 201, {
-        message: 'Image uploaded successfully.',
-        fileName,
-        path: `/uploads/${fileName}`
-      });
+    sendJson(res, 201, {
+      message: 'Image uploaded successfully.',
+      fileName,
+      path: storedPath
     });
+    console.log(`Uploaded ${fileName} -> ${storedPath}`);
+  } catch (err) {
+    console.error('Upload failed:', err);
+    const status = err.statusCode || err.httpStatusCode || 500;
+    sendJson(res, status, { error: err.message || 'Failed to store upload.' });
+  }
+}
+
+function extractImagePart(parts) {
+  return parts.find((part) => {
+    const dispositionLine = part.headers
+      .split(/\r?\n/)
+      .find((line) => line.toLowerCase().startsWith('content-disposition'));
+    if (!dispositionLine) return false;
+
+    const nameMatch = dispositionLine.match(/name="([^"]+)"/i);
+    const fieldName = nameMatch ? nameMatch[1] : '';
+    if (fieldName !== 'image') return false;
+
+    const filenameMatch = dispositionLine.match(/filename="([^"]*)"/i);
+    return Boolean(filenameMatch && filenameMatch[1]);
   });
+}
+
+async function storeImage(buffer, mimeType, fileName) {
+  if (S3_BUCKET) {
+    return storeToS3(buffer, mimeType, fileName);
+  }
+  return storeToDisk(buffer, fileName);
+}
+
+async function storeToDisk(buffer, fileName) {
+  const destination = path.join(UPLOAD_DIR, fileName);
+  await fs.promises.writeFile(destination, buffer);
+  return `/uploads/${fileName}`;
+}
+
+async function storeToS3(buffer, mimeType, fileName) {
+  ensureS3Client();
+
+  const command = new PutObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: fileName,
+    Body: buffer,
+    ContentType: mimeType,
+    ACL: process.env.S3_ACL || 'public-read'
+  });
+
+  await s3Client.send(command);
+  return `${ASSET_BASE_URL || `https://${S3_BUCKET}.s3.amazonaws.com`}/${fileName}`;
+}
+
+function ensureS3Client() {
+  if (s3Client) return;
+  try {
+    const aws = require('@aws-sdk/client-s3');
+    s3Client = new aws.S3Client({ region: AWS_REGION });
+    PutObjectCommand = aws.PutObjectCommand;
+  } catch (err) {
+    err.message = 'S3 client not available. Install @aws-sdk/client-s3 and set AWS_REGION.';
+    throw err;
+  }
 }
 
 const server = http.createServer((req, res) => {
