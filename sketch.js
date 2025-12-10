@@ -30,6 +30,7 @@ function setup() {
   saveBtn.mousePressed(saveA0Image);
 
   previewBaubles = generateBaubles(width, height);
+  loadExistingImages();
 }
 
 function windowResized() {
@@ -274,4 +275,17 @@ async function uploadToServer(imageFile) {
 
   const data = await response.json();
   return data.path;
+}
+
+async function loadExistingImages() {
+  try {
+    const res = await fetch('/images');
+    if (!res.ok) return;
+    const list = await res.json();
+    for (const url of list) {
+      loadImage(url, (img) => images.push(img));
+    }
+  } catch (err) {
+    console.error('Failed to load existing images:', err);
+  }
 }

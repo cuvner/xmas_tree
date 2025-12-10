@@ -8,6 +8,7 @@ const AWS_REGION = process.env.AWS_REGION;
 const ASSET_BASE_URL = process.env.ASSET_BASE_URL || (S3_BUCKET ? `https://${S3_BUCKET}.s3.amazonaws.com` : null);
 let s3Client;
 let PutObjectCommand;
+let ListObjectsV2Command;
 
 const ROOT_DIR = __dirname;
 const UPLOAD_DIR = path.join(ROOT_DIR, 'uploads');
@@ -237,10 +238,58 @@ function ensureS3Client() {
     const aws = require('@aws-sdk/client-s3');
     s3Client = new aws.S3Client({ region: AWS_REGION });
     PutObjectCommand = aws.PutObjectCommand;
+    ListObjectsV2Command = aws.ListObjectsV2Command;
   } catch (err) {
     err.message = 'S3 client not available. Install @aws-sdk/client-s3 and set AWS_REGION.';
     throw err;
   }
+}
+
+function handleListImages(req, res) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  listImages()
+    .then((images) => sendJson(res, 200, images))
+    .catch((err) => {
+      console.error('List images failed:', err);
+      sendJson(res, 500, { error: 'Failed to list images.' });
+    });
+}
+
+async function listImages() {
+  if (S3_BUCKET) {
+    return listImagesFromS3();
+  }
+  return listImagesFromDisk();
+}
+
+async function listImagesFromDisk() {
+  const files = await fs.promises.readdir(UPLOAD_DIR);
+  return files
+    .filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f))
+    .map((f) => `/uploads/${f}`);
+}
+
+async function listImagesFromS3() {
+  ensureS3Client();
+  const command = new ListObjectsV2Command({
+    Bucket: S3_BUCKET,
+    MaxKeys: 100
+  });
+  const result = await s3Client.send(command);
+  const items = result.Contents || [];
+  return items
+    .filter((obj) => obj.Key)
+    .map((obj) => buildPublicUrl(obj.Key));
+}
+
+function buildPublicUrl(key) {
+  const base = ASSET_BASE_URL || `https://${S3_BUCKET}.s3.amazonaws.com`;
+  return `${base}/${encodeURIComponent(key)}`;
 }
 
 const server = http.createServer((req, res) => {
@@ -248,6 +297,11 @@ const server = http.createServer((req, res) => {
 
   if (pathname === '/upload') {
     handleUpload(req, res);
+    return;
+  }
+
+  if (pathname === '/images') {
+    handleListImages(req, res);
     return;
   }
 
