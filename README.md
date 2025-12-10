@@ -99,3 +99,23 @@ curl -X POST http://localhost:3000/upload \
 ```
 
 Successful uploads are written to the `uploads/` directory with a generated filename, and the response contains the stored file name and path.
+
+## S3 CORS tightening (optional)
+
+Restrict S3 CORS to your app origin instead of `*`. Example JSON for Heroku app URL:
+
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://xmas-tree-app-6d8015f388d0.herokuapp.com"],
+      "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": [],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
+```
+
+Replace the origin with your domain(s) if different.

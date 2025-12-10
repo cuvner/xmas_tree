@@ -150,30 +150,22 @@ async function processUpload(parts, res) {
       return;
     }
 
-    const contentTypeLine = imagePart.headers
-      .split(/\r?\n/)
-      .find((line) => line.toLowerCase().startsWith('content-type'));
-
-    const mimeType = contentTypeLine
-      ? contentTypeLine.split(':')[1].trim().toLowerCase()
-      : 'application/octet-stream';
-
-    if (!mimeType.startsWith('image/')) {
-      sendJson(res, 400, { error: 'Only image uploads are allowed.' });
+    const sniffedMime = detectMimeType(imagePart.data);
+    if (!sniffedMime) {
+      sendJson(res, 400, { error: 'Unsupported or invalid image format.' });
       return;
     }
 
     const extensionMap = {
       'image/png': '.png',
       'image/jpeg': '.jpg',
-      'image/jpg': '.jpg',
       'image/gif': '.gif',
       'image/webp': '.webp'
     };
 
-    const fileExtension = extensionMap[mimeType] || '.img';
+    const fileExtension = extensionMap[sniffedMime] || '.img';
     const fileName = `${randomUUID()}${fileExtension}`;
-    const storedPath = await storeImage(imagePart.data, mimeType, fileName);
+    const storedPath = await storeImage(imagePart.data, sniffedMime, fileName);
 
     sendJson(res, 201, {
       message: 'Image uploaded successfully.',
@@ -290,6 +282,35 @@ async function listImagesFromS3() {
 function buildPublicUrl(key) {
   const base = ASSET_BASE_URL || `https://${S3_BUCKET}.s3.amazonaws.com`;
   return `${base}/${encodeURIComponent(key)}`;
+}
+
+function detectMimeType(buffer) {
+  if (!buffer || buffer.length < 12) return null;
+
+  // PNG
+  if (buffer.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'image/png';
+  }
+
+  // JPEG
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    return 'image/jpeg';
+  }
+
+  // GIF87a / GIF89a
+  if (buffer.slice(0, 6).toString('ascii') === 'GIF87a' || buffer.slice(0, 6).toString('ascii') === 'GIF89a') {
+    return 'image/gif';
+  }
+
+  // WebP RIFF header
+  if (
+    buffer.slice(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.slice(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
 }
 
 const server = http.createServer((req, res) => {
