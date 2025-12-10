@@ -8,7 +8,7 @@ let images = [];
 let fileInput;
 let saveBtn;
 
-const rows = 10;     // 10 rows → 100 image slots
+const rows = 10; // 10 rows → 100 image slots
 const totalSlots = rows * rows;
 
 // A0 portrait ratio (height = width * sqrt(2))
@@ -155,21 +155,32 @@ function drawStar(g, w, h, animated) {
 
   let angle = animated ? frameCount * 0.1 : 0;
 
-  if (g) g.push(); else push();
-  if (g) g.translate(x, y); else translate(x, y);
-  if (g) g.rotate(radians(angle)); else rotate(radians(angle));
+  if (g) g.push();
+  else push();
+  if (g) g.translate(x, y);
+  else translate(x, y);
+  if (g) g.rotate(radians(angle));
+  else rotate(radians(angle));
 
   drawStarShape(g, 0, 0, outer, inner, 5);
 
-  if (g) g.pop(); else pop();
+  if (g) g.pop();
+  else pop();
 }
 
 function drawStarShape(g, x, y, r1, r2, n) {
   let angle = TWO_PI / n;
   let half = angle / 2;
 
-  if (g) { g.fill(255, 215, 0); g.noStroke(); g.beginShape(); }
-  else { fill(255, 215, 0); noStroke(); beginShape(); }
+  if (g) {
+    g.fill(255, 215, 0);
+    g.noStroke();
+    g.beginShape();
+  } else {
+    fill(255, 215, 0);
+    noStroke();
+    beginShape();
+  }
 
   for (let a = 0; a < TWO_PI; a += angle) {
     let sx1 = x + cos(a) * r1;
@@ -177,8 +188,13 @@ function drawStarShape(g, x, y, r1, r2, n) {
     let sx2 = x + cos(a + half) * r2;
     let sy2 = y + sin(a + half) * r2;
 
-    if (g) { g.vertex(sx1, sy1); g.vertex(sx2, sy2); }
-    else { vertex(sx1, sy1); vertex(sx2, sy2); }
+    if (g) {
+      g.vertex(sx1, sy1);
+      g.vertex(sx2, sy2);
+    } else {
+      vertex(sx1, sy1);
+      vertex(sx2, sy2);
+    }
   }
 
   if (g) g.endShape(CLOSE);
@@ -191,8 +207,8 @@ function drawStarShape(g, x, y, r1, r2, n) {
 function generateBaubles(w, h) {
   let arr = [];
   let maxRowWidth = w * 0.75;
-  let treeHeight = h * 0.5;
-  let topY = h * 0.1;
+  let treeHeight = h * 0.7;
+  let topY = h * 0.3;
   let rowH = treeHeight / rows;
 
   for (let i = 0; i < NUM_BAUBLES; i++) {
@@ -210,14 +226,14 @@ function generateBaubles(w, h) {
       [30, 120, 220],
       [230, 200, 40],
       [180, 40, 180],
-      [40, 200, 120]
+      [40, 200, 120],
     ]);
 
     arr.push({
       x: startX + floor(random(slots)) * slotW,
       y,
       size: random(slotW * 0.4, slotW * 0.7),
-      col
+      col,
     });
   }
 
@@ -249,28 +265,32 @@ function handleFile(file) {
   if (file.type === "image") {
     uploadToServer(file.file || file)
       .then((url) => {
-        loadImage(url, (img) => images.push(img), (err) => {
-          console.error('Failed to load uploaded image:', err);
-        });
+        loadImage(
+          url,
+          (img) => images.push(img),
+          (err) => {
+            console.error("Failed to load uploaded image:", err);
+          }
+        );
       })
       .catch((err) => {
-        console.error('Upload failed:', err);
+        console.error("Upload failed:", err);
       });
   }
 }
 
 async function uploadToServer(imageFile) {
   const formData = new FormData();
-  formData.append('image', imageFile);
+  formData.append("image", imageFile);
 
-  const response = await fetch('/upload', {
-    method: 'POST',
-    body: formData
+  const response = await fetch("/upload", {
+    method: "POST",
+    body: formData,
   });
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || 'Upload failed');
+    throw new Error(message || "Upload failed");
   }
 
   const data = await response.json();
@@ -279,13 +299,13 @@ async function uploadToServer(imageFile) {
 
 async function loadExistingImages() {
   try {
-    const res = await fetch('/images');
+    const res = await fetch("/images");
     if (!res.ok) return;
     const list = await res.json();
     for (const url of list) {
       loadImage(url, (img) => images.push(img));
     }
   } catch (err) {
-    console.error('Failed to load existing images:', err);
+    console.error("Failed to load existing images:", err);
   }
 }
