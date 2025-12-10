@@ -149,7 +149,7 @@ function drawTrunk(g, w, h) {
 //
 function drawStar(g, w, h, animated) {
   let x = w / 2;
-  let y = h * 0.08;
+  let y = h * 0.05; // lift the star higher on the canvas
   let outer = h * 0.045;
   let inner = h * 0.02;
 
@@ -208,7 +208,7 @@ function generateBaubles(w, h) {
   let arr = [];
   let maxRowWidth = w * 0.75;
   let treeHeight = h * 0.7;
-  let topY = h * 0.3;
+  let topY = h * 0.01;
   let rowH = treeHeight / rows;
 
   for (let i = 0; i < NUM_BAUBLES; i++) {
